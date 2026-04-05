@@ -9,8 +9,8 @@ mkdir -p depin-node && cd depin-node
 
 # 2. Téléchargement de tes scripts depuis ton GitHub
 echo "📥 Téléchargement des fichiers du nœud..."
-curl -sO https://raw.githubusercontent.com/TonPseudo/TonRepo/main/worker.js
-curl -sO https://raw.githubusercontent.com/TonPseudo/TonRepo/main/register.js
+curl -sO https://raw.githubusercontent.com/funfloo/DePINAI/main/install/worker.js
+curl -sO https://raw.githubusercontent.com/funfloo/DePINAI/main/install/register.js
 
 # 3. L'interrogatoire (Configuration)
 echo ""
