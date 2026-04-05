@@ -47,10 +47,24 @@ npm install -g pm2 ngrok > /dev/null
 
 # 7. Affichage des statistiques du marché en direct
 node getPriceStats.js
+DEFAULT_PRICE=$(cat .suggested_price)
 
 # 8. L'interrogatoire (Configuration & Choix du prix)
 echo ""
-read -p "💸 À quel prix souhaitez-vous louer votre IA ? (en wei par caractère, ex: 10) : " PRICE_PER_CHAR < /dev/tty
+echo "💸 CONFIGURATION DU PRIX :"
+echo "Appuyez simplement sur [ENTRÉE] pour utiliser le prix automatique du marché ($DEFAULT_PRICE wei)."
+read -p "Ou tapez un prix personnalisé (en wei) : " USER_PRICE < /dev/tty
+
+# Logique de sélection du prix
+if [ -z "$USER_PRICE" ]; then
+    PRICE_PER_CHAR=$DEFAULT_PRICE
+    echo "👉 Mode Automatique activé : Prix fixé à $PRICE_PER_CHAR wei."
+else
+    PRICE_PER_CHAR=$USER_PRICE
+    echo "👉 Mode Personnalisé activé : Prix fixé à $PRICE_PER_CHAR wei."
+fi
+
+echo ""
 read -p "🔑 Clé privée du Wallet de réception (sans '0x') : " PRIVATE_KEY < /dev/tty
 read -p "🔐 Authtoken Ngrok : " NGROK_TOKEN < /dev/tty
 read -p "🌐 Domaine fixe Ngrok (ex: mon-nœud.ngrok-free.app) : " NGROK_DOMAIN < /dev/tty
@@ -58,7 +72,6 @@ read -p "🌐 Domaine fixe Ngrok (ex: mon-nœud.ngrok-free.app) : " NGROK_DOMAIN
 # 9. Création du fichier caché .env
 echo "PRIVATE_KEY=$PRIVATE_KEY" > .env
 echo "RPC_URL=https://ethereum-sepolia-rpc.publicnode.com" >> .env
-
 # 10. Authentification Ngrok
 ngrok config add-authtoken $NGROK_TOKEN > /dev/null
 
