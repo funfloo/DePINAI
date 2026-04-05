@@ -18,41 +18,42 @@ if ! command -v ollama &> /dev/null; then
     curl -fsSL https://ollama.com/install.sh | sh > /dev/null
 fi
 
-# 3. Démarrage d'Ollama (Spécifique aux conteneurs Vast.ai)
+# 3. Démarrage d'Ollama
 if ! curl -s http://localhost:11434/api/tags > /dev/null; then
     echo "⚙️ Démarrage du service Ollama en arrière-plan..."
     ollama serve > /dev/null 2>&1 &
-    sleep 5 # Laisser le temps à l'API de démarrer
+    sleep 5
 fi
 
-# 4. Vérification et téléchargement du modèle Mistral
+# 4. Vérification et téléchargement du modèle
 echo "🔍 Vérification du modèle Mistral..."
 if ! ollama list | grep -q "mistral"; then
     echo "📥 Téléchargement du modèle Mistral (cela peut prendre quelques minutes)..."
     ollama pull mistral
-else
-    echo "✅ Modèle Mistral déjà présent."
 fi
 
-# 5. Création du dossier de travail
+# 5. Création du dossier et téléchargement
 mkdir -p depin-node && cd depin-node
-
-# 6. Téléchargement des scripts depuis GitHub (avec anti-cache)
 echo "📥 Téléchargement des fichiers du nœud..."
 curl -so worker.js "https://raw.githubusercontent.com/funfloo/DePINAI/main/install/worker.js?v=$RANDOM"
 curl -so register.js "https://raw.githubusercontent.com/funfloo/DePINAI/main/install/register.js?v=$RANDOM"
+curl -so getPriceStats.js "https://raw.githubusercontent.com/funfloo/DePINAI/main/install/getPriceStats.js?v=$RANDOM"
 
-# 7. L'interrogatoire (Configuration)
-echo ""
-read -p "🔑 Clé privée du Wallet (sans '0x') : " PRIVATE_KEY < /dev/tty
-read -p "🔐 Authtoken Ngrok : " NGROK_TOKEN < /dev/tty
-read -p "🌐 Domaine fixe Ngrok (ex: mon-nœud.ngrok-free.app) : " NGROK_DOMAIN < /dev/tty
-
-# 8. Installation des dépendances NPM
-echo "⏳ Installation des dépendances systèmes (NPM)..."
+# 6. Installation des dépendances NPM AVANT de poser les questions
+echo "⏳ Configuration de l'environnement (NPM)..."
 npm init -y > /dev/null
 npm install express cors ethers dotenv > /dev/null
 npm install -g pm2 ngrok > /dev/null
+
+# 7. Affichage des statistiques du marché en direct
+node getPriceStats.js
+
+# 8. L'interrogatoire (Configuration & Choix du prix)
+echo ""
+read -p "💸 À quel prix souhaitez-vous louer votre IA ? (en wei par caractère, ex: 10) : " PRICE_PER_CHAR < /dev/tty
+read -p "🔑 Clé privée du Wallet de réception (sans '0x') : " PRIVATE_KEY < /dev/tty
+read -p "🔐 Authtoken Ngrok : " NGROK_TOKEN < /dev/tty
+read -p "🌐 Domaine fixe Ngrok (ex: mon-nœud.ngrok-free.app) : " NGROK_DOMAIN < /dev/tty
 
 # 9. Création du fichier caché .env
 echo "PRIVATE_KEY=$PRIVATE_KEY" > .env
@@ -67,9 +68,9 @@ pm2 start "ngrok http --url=$NGROK_DOMAIN 3000" --name "ngrok-tunnel"
 pm2 start worker.js --name "depin-worker"
 pm2 save > /dev/null
 
-# 12. Inscription automatique sur la Blockchain
+# 12. Inscription automatique sur la Blockchain avec le prix choisi
 echo "🔗 Enregistrement sur le Smart Contract..."
-node register.js $NGROK_DOMAIN
+node register.js $NGROK_DOMAIN $PRICE_PER_CHAR
 
 echo "=================================================="
 echo "✅ FÉLICITATIONS ! VOTRE NŒUD EST ACTIF ET ENREGISTRÉ."
