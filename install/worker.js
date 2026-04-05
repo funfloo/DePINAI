@@ -10,7 +10,7 @@ app.use(express.json());
 // 1. Configuration Web3
 const RPC_URL = process.env.RPC_URL;
 const PRIVATE_KEY = process.env.PRIVATE_KEY;
-const CONTRACT_ADDRESS = process.env.CONTRACT_ADDRESS;
+const CONTRACT_ADDRESS = "0x94C4b77Be4Aa4a6180480a8999bfBDf16257596F";
 
 // L'ABI : On donne au script le "manuel" de ton contrat (juste la fonction dont il a besoin)
 const contractABI = [
