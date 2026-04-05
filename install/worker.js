@@ -1,81 +1,77 @@
-require('dotenv').config();
-const express = require('express');
-const cors = require('cors');
-const { ethers } = require('ethers');
+#!/bin/bash
 
-const app = express();
-app.use(cors());
-app.use(express.json());
+echo "=================================================="
+echo "🚀 INITIALISATION DU NŒUD WORKER DEPIN AI 🚀"
+echo "=================================================="
 
-// 1. Configuration Web3
-const RPC_URL = process.env.RPC_URL;
-const PRIVATE_KEY = process.env.PRIVATE_KEY;
-const CONTRACT_ADDRESS = process.env.CONTRACT_ADDRESS;
+# 1. Vérification et installation de Node.js
+if ! command -v node &> /dev/null; then
+    echo "📦 Installation de Node.js (Prérequis)..."
+    apt-get update -y > /dev/null
+    curl -fsSL https://deb.nodesource.com/setup_20.x | bash - > /dev/null
+    apt-get install -y nodejs > /dev/null
+fi
 
-// L'ABI : On donne au script le "manuel" de ton contrat (juste la fonction dont il a besoin)
-const contractABI = [
-    "function completeTask(uint256 _taskId, uint256 _actualTotalChars) external"
-];
+# 2. Vérification et installation d'Ollama
+if ! command -v ollama &> /dev/null; then
+    echo "🧠 Installation d'Ollama..."
+    curl -fsSL https://ollama.com/install.sh | sh > /dev/null
+fi
 
-// Connexion à la blockchain
-const provider = new ethers.JsonRpcProvider(RPC_URL);
-const wallet = new ethers.Wallet(PRIVATE_KEY, provider);
-const contract = new ethers.Contract(CONTRACT_ADDRESS, contractABI, wallet);
+# 3. Démarrage d'Ollama (Spécifique aux conteneurs Vast.ai)
+if ! curl -s http://localhost:11434/api/tags > /dev/null; then
+    echo "⚙️ Démarrage du service Ollama en arrière-plan..."
+    ollama serve > /dev/null 2>&1 &
+    sleep 5 # Laisser le temps à l'API de démarrer
+fi
 
-// 2. Réception de la mission
-app.post('/api/generate', async (req, res) => {
-    const { taskId, prompt } = req.body;
+# 4. Vérification et téléchargement du modèle Mistral
+echo "🔍 Vérification du modèle Mistral..."
+if ! ollama list | grep -q "mistral"; then
+    echo "📥 Téléchargement du modèle Mistral (cela peut prendre quelques minutes)..."
+    ollama pull mistral
+else
+    echo "✅ Modèle Mistral déjà présent."
+fi
 
-    if (!taskId || !prompt) {
-        return res.status(400).json({ error: "taskId et prompt requis" });
-    }
+# 5. Création du dossier de travail
+mkdir -p depin-node && cd depin-node
 
-    console.log(`\n🚀 Nouvelle tâche reçue ! Task ID: ${taskId}`);
-    console.log(`📝 Prompt: "${prompt}"`);
+# 6. Téléchargement des scripts depuis GitHub (avec anti-cache)
+echo "📥 Téléchargement des fichiers du nœud..."
+curl -so worker.js "https://raw.githubusercontent.com/funfloo/DePINAI/main/install/worker.js?v=$RANDOM"
+curl -so register.js "https://raw.githubusercontent.com/funfloo/DePINAI/main/install/register.js?v=$RANDOM"
 
-    try {
-        // 3. Demander à l'IA locale de travailler (Ollama sur le port 11434)
-        console.log("🧠 Interrogation d'Ollama en cours...");
-        const ollamaResponse = await fetch('http://127.0.0.1:11434/api/generate', {
-            method: 'POST',
-            headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({
-                model: "mistral", // Change par "llama3" ou autre selon ce que tu as sur Vast.ai
-                prompt: prompt,
-                stream: false
-            })
-        });
+# 7. L'interrogatoire (Configuration)
+echo ""
+read -p "🔑 Clé privée du Wallet (sans '0x') : " PRIVATE_KEY < /dev/tty
+read -p "🔐 Authtoken Ngrok : " NGROK_TOKEN < /dev/tty
+read -p "🌐 Domaine fixe Ngrok (ex: mon-nœud.ngrok-free.app) : " NGROK_DOMAIN < /dev/tty
 
-        const ollamaData = await ollamaResponse.json();
-        const aiText = ollamaData.response;
-        const charsCount = aiText.length;
+# 8. Installation des dépendances NPM
+echo "⏳ Installation des dépendances systèmes (NPM)..."
+npm init -y > /dev/null
+npm install express cors ethers dotenv > /dev/null
+npm install -g pm2 ngrok > /dev/null
 
-        console.log(`✅ Réponse générée (${charsCount} caractères).`);
+# 9. Création du fichier caché .env
+echo "PRIVATE_KEY=$PRIVATE_KEY" > .env
+echo "RPC_URL=https://ethereum-sepolia-rpc.publicnode.com" >> .env
 
-        // 4. Réclamer le paiement sur le Smart Contract
-        console.log("💸 Réclamation du paiement en cours...");
-        const tx = await contract.completeTask(taskId, charsCount);
-        console.log(`⏳ En attente de validation par les mineurs... (Tx: ${tx.hash})`);
+# 10. Authentification Ngrok
+ngrok config add-authtoken $NGROK_TOKEN > /dev/null
 
-        await tx.wait(); // On attend que la transaction soit gravée
-        console.log("💰 Paiement reçu avec succès sur le Wallet du Worker !");
+# 11. Lancement silencieux en arrière-plan (PM2)
+echo "⚙️ Démarrage des processus en arrière-plan..."
+pm2 start "ngrok http --domain=$NGROK_DOMAIN 3000" --name "ngrok-tunnel"
+pm2 start worker.js --name "depin-worker"
+pm2 save > /dev/null
 
-        // 5. Renvoyer le texte final au client (l'interface web)
-        res.json({
-            success: true,
-            response: aiText,
-            txHash: tx.hash
-        });
+# 12. Inscription automatique sur la Blockchain
+echo "🔗 Enregistrement sur le Smart Contract..."
+node register.js $NGROK_DOMAIN
 
-    } catch (error) {
-        console.error("❌ Erreur pendant le processus :", error);
-        res.status(500).json({ error: "Le nœud a rencontré une erreur technique." });
-    }
-});
-
-const PORT = process.env.PORT || 3000;
-app.listen(PORT, () => {
-    console.log(`\n🟢 DePIN Worker Node en ligne sur le port ${PORT}`);
-    console.log(`🔗 Wallet du nœud : ${wallet.address}`);
-    console.log(`📡 Prêt à recevoir des tâches et interroger Ollama.`);
-});
+echo "=================================================="
+echo "✅ FÉLICITATIONS ! VOTRE NŒUD EST ACTIF ET ENREGISTRÉ."
+echo "Pour voir les logs de votre IA en direct, tapez : pm2 logs"
+echo "=================================================="
