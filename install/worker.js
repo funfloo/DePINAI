@@ -63,7 +63,7 @@ ngrok config add-authtoken $NGROK_TOKEN > /dev/null
 
 # 11. Lancement silencieux en arrière-plan (PM2)
 echo "⚙️ Démarrage des processus en arrière-plan..."
-pm2 start "ngrok http --domain=$NGROK_DOMAIN 3000" --name "ngrok-tunnel"
+pm2 start "ngrok http --url=$NGROK_DOMAIN 3000" --name "ngrok-tunnel"
 pm2 start worker.js --name "depin-worker"
 pm2 save > /dev/null
 
